@@ -1,0 +1,66 @@
+# x-healthcheck-defaults: &healthcheck-defaults
+#   # start_period: 30s # Duration of the initial grace period
+#   # start_interval: 1s # Check every 1s during start_period
+#   interval: 10s # Check every 2 minutes after start_period, set to 10s for now as codespace does not support start_interval as it is using docker engine v24 change this to 2m once docker engine is >= v25
+#   timeout: 5s
+#   retries: 3
+volumes:
+  pgadmin-data:
+  postgres-data:
+services:
+  db:
+    image: postgres:16.3
+    restart: unless-stopped
+    # no need to expose the port as it will be used by internal services only
+    # ports:
+    #   - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pgdb}
+      POSTGRES_USER: ${POSTGRES_USER:-pguser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pgpwd}
+    # healthcheck:
+    #   <<: *healthcheck-defaults
+    #   test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-pguser} -d $${POSTGRES_DB:-pgdb} || exit 1" ]
+  pgadmin:
+    image: dpage/pgadmin4:9
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@pgadmin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-pgadmin_password}
+      PGADMIN_CONFIG_PROXY_X_HOST_COUNT: 1
+      PGADMIN_CONFIG_PROXY_X_PREFIX_COUNT: 1
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: 10
+      PGADMIN_SERVER_JSON_FILE: /tmp/servers.json
+      PGADMIN_CONFIG_SERVER_MODE: ${PGADMIN_CONFIG_SERVER_MODE:-False}
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: ${PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED:-False}
+      PGADMIN_LISTEN_PORT: 5050
+    entrypoint: >
+      sh -c '
+        echo "db:${PORT_POSTGRES:-5432}:${POSTGRES_DB:-pgdb}:${POSTGRES_USER:-pguser}:${POSTGRES_PASSWORD:-pgpwd}" > /tmp/pgpassfile &&
+        chmod 600 /tmp/pgpassfile &&
+        echo "{
+          \"Servers\": {
+            \"1\": {
+              \"Name\": \"DB\",
+              \"Group\": \"Servers\",
+              \"Host\": \"db\",
+              \"Port\": ${PORT_POSTGRES:-5432},
+              \"MaintenanceDB\": \"${POSTGRES_DB:-pgdb}\",
+              \"Username\": \"${POSTGRES_USER:-pguser}\",
+              \"PassFile\": \"/tmp/pgpassfile\",
+              \"SSLMode\": \"prefer\"
+            }
+          }
+        }" > /tmp/servers.json &&
+        /entrypoint.sh'
+    ports:
+      - "5050:5050"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
+    # healthcheck:
+    #   <<: *healthcheck-defaults
+    #   test: [ "CMD", "wget", "-O", "-", "http://localhost:5050/misc/ping" ]
