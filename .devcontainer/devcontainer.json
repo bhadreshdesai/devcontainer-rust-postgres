@@ -46,7 +46,7 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        // "atommaterial.a-file-icon-vscode",
+        "atommaterial.a-file-icon-vscode",
         "akamud.vscode-theme-onedark",
         "huntertran.auto-markdown-toc",
         "TakumiI.markdowntable",
